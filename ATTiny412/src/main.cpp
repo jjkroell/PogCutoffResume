@@ -29,7 +29,7 @@ volatile unsigned long lastInteruptTrigger;
 int configValuesArray[5] = {0, 0, 0, 0, 0};
 int minimumVoltageArray[5] = {3000, 2900, 3100, 2800, 3200}; //minimum voltage to trigger cuttoff
 int resumeVoltageArray[5] = {3600, 3300, 3700, 3900, 4100}; //minimum voltage to resume providing power to the node
-int resetTriggerPeriodArray[5] = {7, 0, 14, 1, 3}; //reset trigger period in days. 0 = OFF. aux1 pin output
+int resetTriggerPeriodArray[5] = {0, 7, 14, 1, 3}; //reset trigger period in days. default (index 0) = 0 = OFF. aux1 pin output
 int maxTempCutoffArrray[5] = {60, 65, 50, 70, 0}; //min internal temp sensor value in Celsius to trigger cutoff. 0 = OFF
 int IdleResetArray[5] = {0, 30, 60, -600, -1800}; //duration between pin status change on aux2 in seconds. reset positive, cutoff negative. 0 = OFF. aux1 pin output
 
@@ -78,7 +78,7 @@ uint16_t readSupplyVoltage() { // returns value in millivolts to avoid floating 
   return reading;
 }
 
-int readTemp() {
+int readTempC() {
   // based on the datasheet, in section 30.3.2.5 Temperature Measurement
   int8_t sigrow_offset = SIGROW.TEMPSENSE1;                           // Read signed value from signature row
   uint8_t sigrow_gain = SIGROW.TEMPSENSE0;                            // Read unsigned value from signature row
@@ -198,11 +198,11 @@ void loop() {
   timeIdle = millis();
   timeReset = millis();
   while(readSupplyVoltage() >= minimumVoltage){                 //check voltage is above cutoff. can start below resume voltage.
-    if(readTemp() <= maxTempCutoff){                            //check MCU temp, cut if too high
+    if(readTempC() <= maxTempCutoff){                            //check MCU temp, cut if too high
       digitalWrite(outEnPin, LOW);
     }else{
       digitalWrite(outEnPin, HIGH);
-      while(readTemp() > maxTempCutoff){                        //hold node in cutoff state until temp drops below max temp
+      while(readTempC() > maxTempCutoff){                        //hold node in cutoff state until temp drops below max temp
         digitalWrite(LEDPin, LOW);
         delay(longBlinkDelay);
         digitalWrite(LEDPin, HIGH);
