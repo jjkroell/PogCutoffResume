@@ -23,6 +23,38 @@ ok I think I have the firmware for the cutoff boards finished now.
 - idle reset, listen for LOW pin state on aux2 pin. Positive value = reset, negative = cutoff and sleep until LOW pin state on aux2 pin again.
 - single button menu to configure the board during runtime
 
+# Flashing the boards (install.sh)
+
+`install.sh` builds the firmware and flashes it onto ATtiny412 boards over a
+serial-UPDI programmer (a CH340 / CP2102 / FTDI USB-serial adapter wired for
+UPDI). For each board it erases, writes the **1.8 V brown-out** fuse, flashes and
+**verifies** the firmware, prints a **SUCCESSFUL** prompt, then **auto-detects the
+next board** so a whole batch can be flashed hands-free.
+
+```
+git clone https://github.com/jjkroell/PogCutoffResume.git
+cd PogCutoffResume
+./install.sh
+```
+
+It installs PlatformIO + pymcuprog if they are missing, builds the firmware, then
+asks you to connect the programmer. Insert a board, wait for the SUCCESSFUL
+prompt, swap to the next one — press Ctrl-C to finish. If a board is pulled too
+early or fails to seat, that board is retried automatically (nothing is skipped).
+
+**Serial-UPDI wiring:** programmer **UPDI** -> header **J2 middle pin**
+(PA0/RESET/UPDI); **GND** -> any GND pad; **VCC/+** -> VIN. (J2's other two pins
+are PA2 and PA3/AUX2, so do not wire a 3-pin UPDI/VCC/GND harness straight across
+J2.)
+
+Manual flashing without the script:
+
+```
+cd ATTiny412
+pio run -e ATtiny412 -t upload      # firmware
+pio run -e set_fuses -t fuses       # 1.8 V brown-out fuse
+```
+
 # Testing Info:
 So I really havent had time to do extensive testing, but I have tested the below:
 
@@ -50,7 +82,7 @@ So I really havent had time to do extensive testing, but I have tested the below
 |:-------------|:-------------:|:-------------:|:-------------:|:-------------:|:-------------:|
 |1: Cutoff Voltage|3000|2900|3100|2800|3200|
 |2: Resume Voltage|3600|3300|3700|3900|4100|
-|3: Days Between Reset|7|0|14|1|3|
+|3: Days Between Reset|0|7|14|1|3|
 |4: Max Temperature Cutoff|60|65|50|70|0|
 |5: Idle Time Reset|0|30|60|-600*|-1800*|
 |6: Set Config to Defaults|0|0|0|0|1|
@@ -63,7 +95,7 @@ int minimumVoltageArray[5] = {3000, 2900, 3100, 2800, 3200}; //minimum voltage t
 
 int resumeVoltageArray[5] = {3600, 3300, 3700, 3900, 4100}; //minimum voltage to resume providing power to the node
 
-int resetTriggerPeriodArray[5] = {7, 0, 14, 28, 3}; //reset trigger period in days. 0 = OFF. aux1 pin output
+int resetTriggerPeriodArray[5] = {0, 7, 14, 1, 3}; //reset trigger period in days. default (index 0) = 0 = OFF. aux1 pin output
 
 int maxTempCutoffArrray[5] = {60, 65, 50, 70, 0}; //min internal temp sensor value in Celsius to trigger cutoff. 0 = OFF
 
