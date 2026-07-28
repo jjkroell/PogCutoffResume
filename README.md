@@ -23,24 +23,30 @@ ok I think I have the firmware for the cutoff boards finished now.
 - idle reset, listen for LOW pin state on aux2 pin. Positive value = reset, negative = cutoff and sleep until LOW pin state on aux2 pin again.
 - single button menu to configure the board during runtime
 
-# Flashing the boards (install.sh)
+# Flashing the boards (flash.sh)
 
-`install.sh` builds the firmware and flashes it onto ATtiny412 boards over a
+`flash.sh` is an interactive batch flasher for programming the boards over a
 serial-UPDI programmer (a CH340 / CP2102 / FTDI USB-serial adapter wired for
-UPDI). For each board it erases, writes the **1.8 V brown-out** fuse, flashes and
-**verifies** the firmware, prints a **SUCCESSFUL** prompt, then **auto-detects the
-next board** so a whole batch can be flashed hands-free.
+UPDI). It:
+
+1. **Checks a UPDI adapter is plugged in** and exits with a clear message if not.
+2. **Builds the firmware once** from `./ATTiny412` (so the flashed default for
+   *Days Between Reset* is `0` / OFF, straight from the repo source).
+3. **Asks how many boards** you're flashing.
+4. For each board it waits for you to seat it, then **erases → writes the 1.8 V
+   brown-out fuse → verifies the fuse → flashes → verifies** the firmware, prints
+   a green **✅ SUCCESSFUL — board #N of M** box, and prompts you to seat the next.
 
 ```
 git clone https://github.com/jjkroell/PogCutoffResume.git
 cd PogCutoffResume
-./install.sh
+./flash.sh
 ```
 
-It installs PlatformIO + pymcuprog if they are missing, builds the firmware, then
-asks you to connect the programmer. Insert a board, wait for the SUCCESSFUL
-prompt, swap to the next one — press Ctrl-C to finish. If a board is pulled too
-early or fails to seat, that board is retried automatically (nothing is skipped).
+It installs PlatformIO + pymcuprog if they are missing. Seat a board, press
+**Enter**, wait for the SUCCESSFUL box, swap to the next one — press **Ctrl-C** to
+finish early. Serial-UPDI comms are retried automatically on a freshly seated
+board, and a board that fails to flash is re-prompted rather than skipped.
 
 **Serial-UPDI wiring:** programmer **UPDI** -> header **J2 middle pin**
 (PA0/RESET/UPDI); **GND** -> any GND pad; **VCC/+** -> VIN. (J2's other two pins
