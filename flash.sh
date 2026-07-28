@@ -73,16 +73,36 @@ retry(){ local n=$1; shift; local i; for i in $(seq 1 "$n"); do "$@" && return 0
 # --------------------------------------------------------------- flashing ---
 # Order matters: erase (halt any running firmware) -> fuses -> firmware LAST,
 # so all UPDI work happens before the flashed firmware boots.
-_erase(){  pymcuprog erase -t uart -u "$1" -d "$DEVICE" >/dev/null 2>&1; }
-_fuses(){  ( cd "$PROJ" && pio run -e "$FUSE_ENV" -t fuses --upload-port "$1" >/dev/null 2>&1 ); }
-_bod(){    [ "$(pymcuprog read -t uart -u "$1" -d "$DEVICE" -m fuses 2>/dev/null | sed -n 's/^0x001280: *//p' | awk '{print $2}')" = "$BOD_FUSE" ]; }
-_upload(){ ( cd "$PROJ" && pio run -e "$FW_ENV" -t upload --upload-port "$1" 2>&1 | grep -q "bytes of flash verified" ); }
+# Each step keeps its full output in LOG so a failure can show the REAL
+# programmer error. Swallowing it (>/dev/null, or `2>&1 | grep -q`) is what
+# made "✗ firmware verify failed" indistinguishable from a dropped UPDI
+# connection, a verify mismatch, or a brown-out mid-write.
+LOG=""
+
+_erase(){  LOG="$(pymcuprog erase -t uart -u "$1" -d "$DEVICE" 2>&1)"; }
+_fuses(){  LOG="$( cd "$PROJ" && pio run -e "$FUSE_ENV" -t fuses --upload-port "$1" 2>&1 )"; }
+_bod(){    LOG="$(pymcuprog read -t uart -u "$1" -d "$DEVICE" -m fuses 2>&1)"
+           [ "$(printf '%s\n' "$LOG" | sed -n 's/^0x001280: *//p' | awk '{print $2}')" = "$BOD_FUSE" ]; }
+_upload(){ LOG="$( cd "$PROJ" && pio run -e "$FW_ENV" -t upload --upload-port "$1" 2>&1 )"
+           printf '%s\n' "$LOG" | grep -q "bytes of flash verified"; }
+
+# Print the tail of the failing step's output, indented, so the actual cause is
+# visible without re-running by hand.
+fail(){
+  say "  ${R}✗ $1${X}"
+  say "  ${Y}── programmer output (last attempt) ──${X}"
+  printf '%s\n' "$LOG" | grep -vE '^[[:space:]]*$' | tail -n 14 | sed 's/^/    /'
+  say "  ${Y}──────────────────────────────────────${X}"
+  say "  ${C}Short steps passing but the firmware write failing usually means"
+  say "  contact or supply, not software: reseat the pogo pins, check VIN holds"
+  say "  up during the ~3 s write, and keep the UPDI lead short.${X}"
+}
 
 flash_board(){  # $1 = port; returns 0 only when every step verifies
-  retry 3 _erase  "$1" || { say "  ${R}✗ erase failed${X}";           return 1; }
-  retry 3 _fuses  "$1" || { say "  ${R}✗ fuse write failed${X}";      return 1; }
-  retry 2 _bod    "$1" || { say "  ${R}✗ BOD fuse verify failed${X}"; return 1; }
-  retry 3 _upload "$1" || { say "  ${R}✗ firmware verify failed${X}"; return 1; }
+  retry 3 _erase  "$1" || { fail "erase failed";           return 1; }
+  retry 3 _fuses  "$1" || { fail "fuse write failed";      return 1; }
+  retry 2 _bod    "$1" || { fail "BOD fuse verify failed"; return 1; }
+  retry 3 _upload "$1" || { fail "firmware verify failed"; return 1; }
   return 0
 }
 
